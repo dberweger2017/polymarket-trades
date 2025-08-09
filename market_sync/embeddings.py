@@ -1,3 +1,4 @@
+# market_sync/embeddings.py
 import os
 import json
 import time

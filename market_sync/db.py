@@ -1,3 +1,4 @@
+# market_sync/db.py
 import sqlite3
 import logging
 from .util import now_ts
