@@ -23,45 +23,64 @@ st.set_page_config(
 # Small CSS polish for cardy look + split panes
 st.markdown("""
 <style>
-/* Global tweaks */
+/* --- Design tokens ------------------------------------------------------- */
+:root{
+  --card-bg:#ffffff;
+  --card-border:#E5E7EB;            /* slate-200 */
+  --text-primary:#0F172A;           /* slate-900 */
+  --text-secondary:#334155;         /* slate-700 */
+  --pill-bg:#F8FAFC;                /* slate-50 */
+  --pill-border:#E2E8F0;            /* slate-200 */
+  --shadow:0 2px 12px rgba(15,23,42,.06);
+  --hover-border:#94A3B8;           /* slate-400 */
+}
+
+@media (prefers-color-scheme: dark){
+  :root{
+    --card-bg:#1f2430;              /* softer than #0f1116 */
+    --card-border:#3B4151;          /* slate-ish */
+    --text-primary:#F8FAFC;         /* near-white */
+    --text-secondary:#CBD5E1;       /* slate-300 */
+    --pill-bg:#131722;              /* very dark */
+    --pill-border:#3B4151;
+    --shadow:0 2px 16px rgba(0,0,0,.45);
+    --hover-border:#64748B;         /* slate-500 */
+  }
+}
+
+/* --- Layout polish ------------------------------------------------------- */
 .main .block-container { padding-top: 1.2rem; padding-bottom: 2rem; max-width: 1400px; }
-
-/* Header badge */
-.badge {
-  display:inline-flex; align-items:center; gap:.5rem;
-  padding:.35rem .6rem; border-radius:999px; font-weight:600;
-  background:linear-gradient(135deg, rgba(59,130,246,.15), rgba(99,102,241,.15));
-  border:1px solid rgba(99,102,241,.25);
-}
-
-/* Section titles */
-.section-title{
-  display:flex; align-items:center; justify-content:space-between; gap:1rem;
-  margin:.25rem 0 0; padding-bottom:.25rem;
-}
-
-/* Cards */
-.card {
-  border-radius:16px; padding:14px 16px; height:100%; background:#0f1116;
-  border:1px solid rgba(148,163,184,.15);
-  transition: transform .08s ease, box-shadow .08s ease, border-color .2s ease;
-  box-shadow: 0 1px 0 rgba(148,163,184,.06), 0 6px 12px rgba(0,0,0,.2);
-}
-.card:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.25); border-color: rgba(148,163,184,.35); }
-.card .title { font-weight:600; line-height:1.2; font-size:0.95rem; }
-.card .desc  { opacity:.8; font-size:.85rem; margin-top:.35rem; max-height:4.5em; overflow:hidden; }
-.card .meta  { display:flex; gap:.5rem; align-items:center; margin-top:.5rem; opacity:.75; font-size:.8rem; }
-.card .pill  { padding:.15rem .5rem; border-radius:999px; border:1px solid rgba(148,163,184,.25); font-size:.74rem; }
-
 .grid { display:grid; gap:12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 1300px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-/* Bottom pane header controls wrap nicely */
-.controls { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
+/* --- Cards --------------------------------------------------------------- */
+.card {
+  border-radius:16px; padding:14px 16px; height:100%;
+  background:var(--card-bg);
+  border:1px solid var(--card-border);
+  box-shadow: var(--shadow);
+  transition: transform .08s ease, box-shadow .08s ease, border-color .2s ease;
+  color:var(--text-primary);
+}
+.card:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(0,0,0,.08); border-color: var(--hover-border); }
 
-/* Buttons */
-button[kind="secondary"] { border-radius:12px; }
+.card .title { font-weight:600; line-height:1.2; font-size:0.98rem; color:var(--text-primary); }
+.card .desc  { color:var(--text-secondary); font-size:.88rem; margin-top:.45rem; max-height:5.2em; overflow:hidden; }
+.card .meta  { display:flex; gap:.5rem; align-items:center; margin-top:.65rem; color:var(--text-secondary); font-size:.8rem; }
+.card .pill  {
+  padding:.18rem .55rem; border-radius:999px;
+  border:1px solid var(--pill-border); background:var(--pill-bg); color:var(--text-secondary);
+}
+
+/* --- Section headers ----------------------------------------------------- */
+.badge {
+  display:inline-flex; align-items:center; gap:.5rem;
+  padding:.35rem .6rem; border-radius:999px; font-weight:600;
+  background:linear-gradient(135deg, rgba(59,130,246,.10), rgba(99,102,241,.10));
+  border:1px solid rgba(99,102,241,.25); color:var(--text-primary);
+}
+.section-title{ display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:.25rem 0 0; padding-bottom:.25rem; }
 </style>
 """, unsafe_allow_html=True)
 
