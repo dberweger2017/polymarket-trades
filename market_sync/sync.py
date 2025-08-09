@@ -7,12 +7,17 @@ from .embeddings import Embedder
 
 logger = logging.getLogger(__name__)
 
-def sync_source(bets: List[Bet], repo: Repo, embedder: Embedder, show_progress: bool = False) -> Tuple[list, list, int]:
+def sync_source(
+    bets: List[Bet],
+    repo: Repo,
+    embedder: Embedder,
+    show_progress: bool = False,
+    backfill_missing: bool = True,     # ← NEW
+) -> Tuple[list, list, int]:
     logger.info("sync_source start: source=%s count=%d", bets[0].source if bets else "", len(bets))
     new_or_changed = []
     active_ids = []
 
-    # --- progress bar (pass 1: upsert) ---
     iterator = bets
     pbar = None
     if show_progress and bets:
@@ -38,34 +43,42 @@ def sync_source(bets: List[Bet], repo: Repo, embedder: Embedder, show_progress: 
     inactivated = repo.mark_inactive_except(bets[0].source if bets else "", set(active_ids))
     logger.info("sync_source: new_or_changed=%d inactivated=%d", len(new_or_changed), inactivated)
 
-    # Decide which texts still need embeddings
+    # --------- Decide what to embed (resume-aware) ----------
+    # If we want to resume after an interrupt, scan ALL current bets.
+    embed_scope = bets if backfill_missing else new_or_changed
+
     need_embed_texts = []
     need_embed_bets = []
-    for b in new_or_changed:
+    for b in embed_scope:
         h = embedder.text_hash(b.text_for_embedding)
         if embedder.cache.get(h, embedder.model) is None:
             need_embed_texts.append(b.text_for_embedding)
             need_embed_bets.append(b)
 
-    # --- progress bar (pass 2: embedding) ---
-    if need_embed_texts:
-        if show_progress:
-            try:
-                from tqdm.auto import tqdm
-                p2 = tqdm(need_embed_bets, desc="embedding", unit="bet")
-                for b in p2:
-                    # ensure still missing (race-safe) then embed one-by-one for rich progress
-                    h = embedder.text_hash(b.text_for_embedding)
-                    if embedder.cache.get(h, embedder.model) is None:
-                        embedder.embed_text(b.text_for_embedding)
-                    p2.set_postfix_str(f"embedded id={b.market_id}")
-                p2.close()
-            except Exception:
-                logger.debug("tqdm not available during embedding; falling back to batch")
-                embedder.embed_texts(need_embed_texts)
-        else:
-            # fast batched path (default)
+    if not need_embed_texts:
+        logger.info("sync_source: nothing to embed (backfill_missing=%s)", backfill_missing)
+        logger.info("sync_source done: source=%s", bets[0].source if bets else "")
+        return new_or_changed, bets, inactivated
+
+    # --------- Embedding phase (progress-aware) ----------
+    if show_progress:
+        try:
+            from tqdm.auto import tqdm
+            phase = "embedding-resume" if backfill_missing else "embedding"
+            p2 = tqdm(need_embed_bets, desc=phase, unit="bet")
+            for b in p2:
+                # double-check still missing (in case of concurrent runs)
+                h = embedder.text_hash(b.text_for_embedding)
+                if embedder.cache.get(h, embedder.model) is None:
+                    embedder.embed_text(b.text_for_embedding)  # per-item for rich progress
+                p2.set_postfix_str(f"embedded id={b.market_id}")
+            p2.close()
+        except Exception:
+            logger.debug("tqdm not available during embedding; falling back to batched")
             embedder.embed_texts(need_embed_texts)
+    else:
+        # Fast batched path
+        embedder.embed_texts(need_embed_texts)
 
     logger.info("sync_source done: source=%s", bets[0].source if bets else "")
     return new_or_changed, bets, inactivated

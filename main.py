@@ -15,6 +15,8 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--ui", action="store_true", help="Launch the live UI")
+    parser.add_argument("--progress", action="store_true", help="Show tqdm progress during sync")
+    parser.add_argument("--no-backfill", action="store_true", help="Do not resume missing embeddings")
     args = parser.parse_args()
 
     if args.ui:
@@ -27,14 +29,13 @@ def main():
         subprocess.run([sys.executable, "-m", "streamlit", "run", str(ui_path)], check=False)
         return
 
-    # default behavior (unchanged)
     conn = open_db(DB_PATH)
     cache = EmbeddingCache(conn)
     repo = Repo(conn)
     embedder = Embedder(model=VOYAGE_MODEL, cache=cache, api_key=os.getenv("VOYAGE_API_KEY"))
     bets = PolymarketClient().fetch_bets(10000)
     print(bets)
-    sync_source(bets, repo, embedder)
+    sync_source(bets, repo, embedder, show_progress=args.progress, backfill_missing=not args.no_backfill)
     # auto_links, queued = propose_and_link(repo, embedder, ["polymarket"])
     # print({"linked": auto_links, "queued": queued})
 
