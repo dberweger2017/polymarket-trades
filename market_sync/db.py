@@ -1,11 +1,16 @@
 import sqlite3
+import logging
 from .util import now_ts
 
+logger = logging.getLogger(__name__)
+
 def open_db(path: str):
+    logger.info("Opening SQLite DB at %s", path)
     conn = sqlite3.connect(path, check_same_thread=False)
     cur = conn.cursor()
     cur.execute("PRAGMA journal_mode=WAL;")
     cur.execute("PRAGMA synchronous=NORMAL;")
+    logger.debug("Ensuring tables exist")
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS embeddings (
@@ -83,5 +88,6 @@ def open_db(path: str):
         """
     )
     conn.commit()
+    logger.info("DB ready")
     return conn
 

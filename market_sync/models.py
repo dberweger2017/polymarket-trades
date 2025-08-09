@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Optional, List
 import hashlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class Bet:
@@ -23,4 +26,13 @@ class Bet:
             pieces.append(desc)
         self.text_for_embedding = "\n\n".join(pieces)
         self.text_hash = hashlib.sha256(self.text_for_embedding.encode("utf-8")).hexdigest()
+        logger.debug(
+            "Bet init: source=%s market_id=%s slug=%s title_len=%d desc_len=%d text_hash=%s",
+            self.source,
+            self.market_id,
+            self.slug,
+            len(self.title or ""),
+            len(self.description or ""),
+            self.text_hash,
+        )
 

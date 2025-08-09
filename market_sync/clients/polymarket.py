@@ -1,4 +1,5 @@
 from typing import List, Optional
+import logging
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -6,10 +7,13 @@ from ..config import GAMMA_BASE, USER_AGENT
 from ..models import Bet
 from ..util import iso_parse
 
+logger = logging.getLogger(__name__)
+
 class PolymarketClient:
     def __init__(self, base: str = GAMMA_BASE, session: Optional[requests.Session] = None):
         self.base = base.rstrip("/")
         self.sess = session or self._build_session()
+        logger.info("PolymarketClient initialized: base=%s", self.base)
 
     def _build_session(self) -> requests.Session:
         s = requests.Session()
@@ -18,6 +22,7 @@ class PolymarketClient:
         s.mount("https://", adapter)
         s.mount("http://", adapter)
         s.headers.update({"User-Agent": USER_AGENT})
+        logger.debug("HTTP session built with retries and UA")
         return s
 
     def fetch_open_markets(self, limit: int = 1000) -> List[dict]:
@@ -27,6 +32,7 @@ class PolymarketClient:
             params = {"limit": min(1000, max(1, limit - len(results))), "state": "open"}
             if cursor:
                 params["cursor"] = cursor
+            logger.debug("GET %s/markets params=%s", self.base, params)
             r = self.sess.get(f"{self.base}/markets", params=params, timeout=30)
             r.raise_for_status()
             payload = r.json()
@@ -34,6 +40,7 @@ class PolymarketClient:
             if isinstance(items, dict) and "data" in items:
                 items = items["data"]
             if not isinstance(items, list):
+                logger.warning("Unexpected payload format; stopping pagination")
                 break
             results.extend(items)
             next_cursor = None
@@ -44,6 +51,7 @@ class PolymarketClient:
             if not next_cursor or len(items) == 0:
                 break
             cursor = next_cursor
+        logger.info("Fetched %d open markets", len(results[:limit]))
         return results[:limit]
 
     @staticmethod
@@ -54,7 +62,7 @@ class PolymarketClient:
         url = f"https://polymarket.com/market/{slug}" if slug else None
         ct_raw = obj.get("closeTime") or obj.get("endDate") or obj.get("end_time")
         close_time = iso_parse(ct_raw)
-        return Bet(
+        bet = Bet(
             source="polymarket",
             market_id=str(obj.get("id")),
             slug=slug,
@@ -64,8 +72,13 @@ class PolymarketClient:
             close_time=close_time,
             raw=obj,
         )
+        logger.debug("Converted market to Bet: id=%s slug=%s title_len=%d", bet.market_id, bet.slug, len(bet.title))
+        return bet
 
     def fetch_bets(self, limit: int) -> List[Bet]:
+        logger.info("fetch_bets limit=%d", limit)
         rows = self.fetch_open_markets(limit=limit)
-        return [self.to_bet(r) for r in rows]
+        bets = [self.to_bet(r) for r in rows]
+        logger.info("fetch_bets produced %d bets", len(bets))
+        return bets
 
