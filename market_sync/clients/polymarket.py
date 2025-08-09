@@ -45,28 +45,31 @@ class PolymarketClient:
                     break
         return items, next_cursor
 
-    def fetch_open_markets(self, limit: int = 1000) -> List[dict]:
+    def fetch_open_markets(self, limit: int = 1000, sort_by_volume: bool = True) -> List[dict]:
         results: List[dict] = []
         cursor = None
         while len(results) < limit:
             params = {
                 "limit": min(1000, max(1, limit - len(results))),
+                # you can keep "state": "open" if it's working for you,
+                # or switch to the explicit flags below:
                 "active": "true",
                 "closed": "false",
                 "archived": "false",
             }
+            if sort_by_volume:
+                params.update({"order": "volume", "ascending": "false"})  # highest volume first
+
             if cursor:
-                params["cursor"] = cursor  # keep your existing pagination mechanism
+                params["cursor"] = cursor
+
             r = self.sess.get(f"{self.base}/markets", params=params, timeout=30, verify=self.verify)
             r.raise_for_status()
             payload = r.json()
             items, next_cursor = self._extract_items_and_cursor(payload)
 
-            # extra guard in case the API ever changes behavior
-            items = [
-                m for m in items
-                if str(m.get("active")).lower() == "true" and str(m.get("closed")).lower() != "true"
-            ]
+            # (Optional) belt-and-suspenders: filter to open client-side too
+            items = [m for m in items if str(m.get("active")).lower() == "true" and str(m.get("closed")).lower() != "true"]
 
             if not items:
                 break
@@ -74,6 +77,7 @@ class PolymarketClient:
             if not next_cursor:
                 break
             cursor = next_cursor
+
         return results[:limit]
 
     @staticmethod
