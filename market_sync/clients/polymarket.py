@@ -49,13 +49,25 @@ class PolymarketClient:
         results: List[dict] = []
         cursor = None
         while len(results) < limit:
-            params = {"limit": min(1000, max(1, limit - len(results))), "state": "open"}
+            params = {
+                "limit": min(1000, max(1, limit - len(results))),
+                "active": "true",
+                "closed": "false",
+                "archived": "false",
+            }
             if cursor:
-                params["cursor"] = cursor
+                params["cursor"] = cursor  # keep your existing pagination mechanism
             r = self.sess.get(f"{self.base}/markets", params=params, timeout=30, verify=self.verify)
             r.raise_for_status()
             payload = r.json()
             items, next_cursor = self._extract_items_and_cursor(payload)
+
+            # extra guard in case the API ever changes behavior
+            items = [
+                m for m in items
+                if str(m.get("active")).lower() == "true" and str(m.get("closed")).lower() != "true"
+            ]
+
             if not items:
                 break
             results.extend(items)
