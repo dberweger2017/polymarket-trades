@@ -17,7 +17,7 @@ def main():
     bets = PolymarketClient().fetch_bets(500)
     print(bets)
     sync_source(bets, repo, embedder)
-    auto_links, queued = propose_and_link(repo, embedder, ["polymarket"])
+    #auto_links, queued = propose_and_link(repo, embedder, ["polymarket"])
     #print({"linked": auto_links, "queued": queued})
 
 if __name__ == "__main__":
