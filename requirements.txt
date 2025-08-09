@@ -1,6 +1,4 @@
-requests
-pydantic
-pandas
-numpy
-python-dotenv
 voyageai
+python-dotenv
+requests
+urllib3>=1.26
