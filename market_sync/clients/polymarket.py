@@ -53,9 +53,9 @@ class PolymarketClient:
                 "limit": min(1000, max(1, limit - len(results))),
                 # you can keep "state": "open" if it's working for you,
                 # or switch to the explicit flags below:
-                "active": "true",
-                "closed": "false",
-                "archived": "false",
+                "active": "true"#,
+                #"closed": "false",
+                #"archived": "false",
             }
             if sort_by_volume:
                 params.update({"order": "volume", "ascending": "false"})  # highest volume first
