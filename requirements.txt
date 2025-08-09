@@ -1,0 +1,6 @@
+requests
+pydantic
+pandas
+numpy
+python-dotenv
+voyageai
