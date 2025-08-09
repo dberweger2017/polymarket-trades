@@ -161,7 +161,7 @@ The project is provider‑agnostic and currently uses **Voyage AI** by default. 
 
 **Important**: Prices above are indicative. Always verify on the providers’ official pricing pages before production use.
 
-See also: /mnt/data/embedding_prices.png
+See also: https://github.com/dberweger2017/polymarket-trades/blob/main/img/embedding_prices.png?raw=true
 
 ---
 
