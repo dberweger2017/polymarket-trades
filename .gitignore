@@ -2,3 +2,5 @@
 .env
 __pycache__/
 embeddings_cache.sqlite
+embeddings_cache.sqlite-shm
+embeddings_cache.sqlite-wal
