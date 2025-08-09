@@ -1,5 +1,4 @@
 from typing import List, Optional
-import logging
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -7,13 +6,11 @@ from ..config import GAMMA_BASE, USER_AGENT
 from ..models import Bet
 from ..util import iso_parse
 
-logger = logging.getLogger(__name__)
-
 class PolymarketClient:
-    def __init__(self, base: str = GAMMA_BASE, session: Optional[requests.Session] = None):
+    def __init__(self, base: str = GAMMA_BASE, session: Optional[requests.Session] = None, verify: bool | str = True):
         self.base = base.rstrip("/")
         self.sess = session or self._build_session()
-        logger.info("PolymarketClient initialized: base=%s", self.base)
+        self.verify = verify
 
     def _build_session(self) -> requests.Session:
         s = requests.Session()
@@ -22,8 +19,30 @@ class PolymarketClient:
         s.mount("https://", adapter)
         s.mount("http://", adapter)
         s.headers.update({"User-Agent": USER_AGENT})
-        logger.debug("HTTP session built with retries and UA")
         return s
+
+    def _extract_items_and_cursor(self, payload):
+        items = []
+        next_cursor = None
+        if isinstance(payload, list):
+            items = payload
+        elif isinstance(payload, dict):
+            data = payload.get("data")
+            if isinstance(data, list):
+                items = data
+            elif isinstance(data, dict) and isinstance(data.get("data"), list):
+                items = data["data"]
+            elif isinstance(payload.get("markets"), list):
+                items = payload["markets"]
+            meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+            for key in ("nextCursor", "next_cursor", "next", "cursor"):
+                if payload.get(key):
+                    next_cursor = payload[key]
+                    break
+                if meta.get(key):
+                    next_cursor = meta[key]
+                    break
+        return items, next_cursor
 
     def fetch_open_markets(self, limit: int = 1000) -> List[dict]:
         results: List[dict] = []
@@ -32,26 +51,16 @@ class PolymarketClient:
             params = {"limit": min(1000, max(1, limit - len(results))), "state": "open"}
             if cursor:
                 params["cursor"] = cursor
-            logger.debug("GET %s/markets params=%s", self.base, params)
-            r = self.sess.get(f"{self.base}/markets", params=params, timeout=30)
+            r = self.sess.get(f"{self.base}/markets", params=params, timeout=30, verify=self.verify)
             r.raise_for_status()
             payload = r.json()
-            items = payload.get("data", payload)
-            if isinstance(items, dict) and "data" in items:
-                items = items["data"]
-            if not isinstance(items, list):
-                logger.warning("Unexpected payload format; stopping pagination")
+            items, next_cursor = self._extract_items_and_cursor(payload)
+            if not items:
                 break
             results.extend(items)
-            next_cursor = None
-            for k in ("nextCursor", "next_cursor", "next", "cursor"):
-                if k in payload and payload[k]:
-                    next_cursor = payload[k]
-                    break
-            if not next_cursor or len(items) == 0:
+            if not next_cursor:
                 break
             cursor = next_cursor
-        logger.info("Fetched %d open markets", len(results[:limit]))
         return results[:limit]
 
     @staticmethod
@@ -62,7 +71,7 @@ class PolymarketClient:
         url = f"https://polymarket.com/market/{slug}" if slug else None
         ct_raw = obj.get("closeTime") or obj.get("endDate") or obj.get("end_time")
         close_time = iso_parse(ct_raw)
-        bet = Bet(
+        return Bet(
             source="polymarket",
             market_id=str(obj.get("id")),
             slug=slug,
@@ -72,13 +81,7 @@ class PolymarketClient:
             close_time=close_time,
             raw=obj,
         )
-        logger.debug("Converted market to Bet: id=%s slug=%s title_len=%d", bet.market_id, bet.slug, len(bet.title))
-        return bet
 
     def fetch_bets(self, limit: int) -> List[Bet]:
-        logger.info("fetch_bets limit=%d", limit)
         rows = self.fetch_open_markets(limit=limit)
-        bets = [self.to_bet(r) for r in rows]
-        logger.info("fetch_bets produced %d bets", len(bets))
-        return bets
-
+        return [self.to_bet(r) for r in rows]
