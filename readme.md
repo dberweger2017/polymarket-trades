@@ -199,4 +199,4 @@ Only market metadata and embedding vectors are stored in SQLite. Embedding provi
 
 ## License
 
-Choose a license that matches your intended distribution and contribution model (e.g., MIT or Apache‑2.0).
+MIT
