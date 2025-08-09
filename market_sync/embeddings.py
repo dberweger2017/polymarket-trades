@@ -34,7 +34,15 @@ class EmbeddingCache:
         self.conn.commit()
 
 class Embedder:
-    def __init__(self, model: str, cache: EmbeddingCache, api_key: Optional[str] = None, max_retries: int = 5, backoff_base: float = 0.5):
+    def __init__(
+        self,
+        model: str,
+        cache: EmbeddingCache,
+        api_key: Optional[str] = None,
+        max_retries: int = 5,
+        backoff_base: float = 0.5,
+        max_batch_size: int = 256,
+    ):
         key = api_key or os.getenv("VOYAGE_API_KEY")
         if not key:
             raise RuntimeError("VOYAGE_API_KEY not set in environment")
@@ -43,6 +51,7 @@ class Embedder:
         self.cache = cache
         self.max_retries = max_retries
         self.backoff_base = backoff_base
+        self.max_batch_size = max_batch_size
 
     @staticmethod
     def text_hash(text: str) -> str:
@@ -74,10 +83,14 @@ class Embedder:
             else:
                 cached_vectors[i] = v
         if missing_texts:
-            new_vecs = self._embed_batch_api(missing_texts)
-            for i, vec in zip(missing_idx, new_vecs):
-                self.cache.set(hashes[i], self.model, vec)
-                cached_vectors[i] = vec
+            # Respect provider batch limits by chunking
+            for start in range(0, len(missing_texts), self.max_batch_size):
+                chunk_texts = missing_texts[start : start + self.max_batch_size]
+                chunk_vecs = self._embed_batch_api(chunk_texts)
+                for offset, vec in enumerate(chunk_vecs):
+                    original_idx = missing_idx[start + offset]
+                    self.cache.set(hashes[original_idx], self.model, vec)
+                    cached_vectors[original_idx] = vec
         return [cached_vectors[i] for i in range(len(texts))]
 
     def embed_text(self, text: str) -> List[float]:

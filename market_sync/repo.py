@@ -45,21 +45,58 @@ class Repo:
         return False, changed
 
     def mark_inactive_except(self, source: str, active_ids: Iterable[str]) -> int:
+        """Mark all rows for a source inactive, except the provided active IDs.
+
+        Avoids SQLite's ~999 parameter limit by:
+        - Computing the number to be inactivated without huge NOT IN lists
+        - Blanket deactivating, then reactivating in chunks
+        """
         now = now_ts()
         ids = list(active_ids)
-        if not ids:
-            logger.info("Marking all bets inactive for source=%s", source)
-            cur = self.conn.execute(
-                "UPDATE bets SET is_active=0, inactive_at=? WHERE source=? AND is_active=1",
-                (now, source),
-            )
+
+        # Compute count of rows that will be inactivated (for return value)
+        if ids:
+            total_active = self.conn.execute(
+                "SELECT COUNT(*) FROM bets WHERE source=? AND is_active=1",
+                (source,),
+            ).fetchone()[0]
+
+            count_active_seen = 0
+            for i in range(0, len(ids), 500):
+                chunk = ids[i : i + 500]
+                placeholders = ",".join("?" * len(chunk))
+                sql = (
+                    f"SELECT COUNT(*) FROM bets WHERE source=? AND is_active=1 "
+                    f"AND market_id IN ({placeholders})"
+                )
+                count_active_seen += self.conn.execute(sql, [source] + chunk).fetchone()[0]
+            to_inactivate_count = max(total_active - count_active_seen, 0)
         else:
-            logger.info("Marking bets inactive for source=%s excluding %d ids", source, len(ids))
-            q = "UPDATE bets SET is_active=0, inactive_at=? WHERE source=? AND is_active=1 AND market_id NOT IN ({})".format(",".join("?" * len(ids)))
-            args = [now, source] + ids
-            cur = self.conn.execute(q, args)
+            to_inactivate_count = self.conn.execute(
+                "SELECT COUNT(*) FROM bets WHERE source=? AND is_active=1",
+                (source,),
+            ).fetchone()[0]
+
+        # 1) Mark all active as inactive for this source
+        logger.info("Blanket deactivating active bets for source=%s", source)
+        self.conn.execute(
+            "UPDATE bets SET is_active=0, inactive_at=? WHERE source=? AND is_active=1",
+            (now, source),
+        )
+
+        # 2) Reactivate provided IDs in chunks
+        if ids:
+            logger.info("Reactivating %d bets for source=%s in chunks", len(ids), source)
+            for i in range(0, len(ids), 500):
+                chunk = ids[i : i + 500]
+                placeholders = ",".join("?" * len(chunk))
+                self.conn.execute(
+                    f"UPDATE bets SET is_active=1, inactive_at=NULL WHERE source=? AND market_id IN ({placeholders})",
+                    [source] + chunk,
+                )
+
         self.conn.commit()
-        return cur.rowcount
+        return to_inactivate_count
 
     def get_event_for_bet(self, source: str, market_id: str) -> Optional[str]:
         row = self.conn.execute(

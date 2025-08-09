@@ -46,6 +46,12 @@ def open_db(path: str):
     cur.execute("CREATE INDEX IF NOT EXISTS idx_bets_active ON bets(is_active)")
     cur.execute(
         """
+        CREATE INDEX IF NOT EXISTS idx_bets_source_active_last
+          ON bets(source, is_active, last_seen_at DESC)
+        """
+    )
+    cur.execute(
+        """
         CREATE TABLE IF NOT EXISTS events (
             id TEXT PRIMARY KEY,
             title TEXT,

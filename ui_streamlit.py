@@ -91,7 +91,11 @@ def get_ctx():
         conn = open_db(DB_PATH)
         cache = EmbeddingCache(conn)
         repo = Repo(conn)
-        embedder = Embedder(model=VOYAGE_MODEL, cache=cache, api_key=os.getenv("VOYAGE_API_KEY"))
+        try:
+            embedder = Embedder(model=VOYAGE_MODEL, cache=cache, api_key=os.getenv("VOYAGE_API_KEY"))
+        except Exception:
+            st.error("Missing or invalid VOYAGE_API_KEY. Set it in your environment to enable embeddings.")
+            st.stop()
         st.session_state.ctx = {
             "conn": conn,
             "repo": repo,
@@ -105,10 +109,12 @@ REPO: Repo = CTX["repo"]
 EMB: Embedder = CTX["embedder"]
 
 # ---------- Data helpers ----------
+@st.cache_data(ttl=5)
 def list_sources() -> List[str]:
     rows = CTX["conn"].execute("SELECT DISTINCT source FROM bets WHERE is_active=1 ORDER BY source").fetchall()
     return [r[0] for r in rows]
 
+@st.cache_data(ttl=5)
 def fetch_active_bets(source: str, limit: int = 500, search: str = "") -> List[Dict]:
     q = """
     SELECT source, market_id, slug, title, COALESCE(description, ''), url, COALESCE(close_time, '')
@@ -141,11 +147,33 @@ def ensure_embedding(text: str) -> List[float]:
     return vec
 
 def rank_similar(target_vec: List[float], candidates: List[Dict]) -> List[Tuple[Dict, float]]:
-    ranked = []
-    for c in candidates:
-        if not c["text"]:
+    # 1) Identify which candidates need embeddings
+    missing_idx: List[int] = []
+    missing_texts: List[str] = []
+    hashes: List[Optional[str]] = []
+    for i, c in enumerate(candidates):
+        text = c.get("text")
+        if not text:
+            hashes.append(None)
             continue
-        vec = ensure_embedding(c["text"])
+        h = EMB.text_hash(text)
+        hashes.append(h)
+        if EMB.cache.get(h, EMB.model) is None:
+            missing_idx.append(i)
+            missing_texts.append(text)
+
+    # 2) Batch-embed missing texts (writes into cache)
+    if missing_texts:
+        EMB.embed_texts(missing_texts)
+
+    # 3) Score with cosine
+    ranked: List[Tuple[Dict, float]] = []
+    for c, h in zip(candidates, hashes):
+        if not c.get("text") or h is None:
+            continue
+        vec = EMB.cache.get(h, EMB.model)
+        if not vec:
+            continue
         ranked.append((c, float(cosine(target_vec, vec))))
     ranked.sort(key=lambda x: x[1], reverse=True)
     return ranked
@@ -185,12 +213,23 @@ pm_bets = fetch_active_bets("polymarket", limit=top_limit, search=top_search)
 if "selected_pm" not in st.session_state and pm_bets:
     st.session_state.selected_pm = pm_bets[0]["market_id"]
 
+# Keep selection valid after filtering
+visible_ids = {b["market_id"] for b in pm_bets}
+if st.session_state.get("selected_pm") not in visible_ids:
+    if pm_bets:
+        st.session_state.selected_pm = pm_bets[0]["market_id"]
+    else:
+        st.session_state.selected_pm = None
+
 # Cards grid
 st.markdown('<div class="grid">', unsafe_allow_html=True)
 for bet in pm_bets:
     selected = (bet["market_id"] == st.session_state.get("selected_pm"))
     border = " style='border-color:rgba(99,102,241,.55)'" if selected else ""
-    link = f"<a href='{bet['url']}' target='_blank' style='text-decoration:none;color:inherit'>🔗</a>" if bet["url"] else ""
+    link = (
+        f"<a href='{bet['url']}' target='_blank' rel='noopener noreferrer' style='text-decoration:none;color:inherit'>🔗</a>"
+        if bet["url"] else ""
+    )
     st.markdown(
         f"""
         <div class="card" {border}>
@@ -256,22 +295,25 @@ else:
             # Render ranked list as cards
             st.markdown('<div class="grid">', unsafe_allow_html=True)
             for cand, score in ranked:
-                link = f"<a href='{cand['url']}' target='_blank' style='text-decoration:none;color:inherit'>🔗</a>" if cand["url"] else ""
-                st.markdown(
-                    f"""
-                    <div class="card">
-                        <div class="title">{cand['title']}</div>
-                        <div class="desc">{cand['description'][:260] + ('…' if len(cand['description'])>260 else '')}</div>
-                        <div class="meta">
-                            <span class="pill">{cand['source']}</span>
-                            <span class="pill">sim: {score:.3f}</span>
-                            <span class="pill">#{cand['market_id']}</span>
-                            {link}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                link = (
+                    f"<a href='{cand['url']}' target='_blank' rel='noopener noreferrer' style='text-decoration:none;color:inherit'>🔗</a>"
+                    if cand["url"] else ""
                 )
+                st.markdown(
+                        f"""
+                        <div class="card">
+                            <div class="title">{cand['title']}</div>
+                            <div class="desc">{cand['description'][:260] + ('…' if len(cand['description'])>260 else '')}</div>
+                            <div class="meta">
+                                <span class="pill">{cand['source']}</span>
+                                <span class="pill">sim: {score:.3f}</span>
+                                <span class="pill">#{cand['market_id']}</span>
+                                {link}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
                 st.button("View", key=f"view_{cand['source']}_{cand['market_id']}")
             st.markdown('</div>', unsafe_allow_html=True)
 

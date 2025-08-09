@@ -34,7 +34,7 @@ def main():
     repo = Repo(conn)
     embedder = Embedder(model=VOYAGE_MODEL, cache=cache, api_key=os.getenv("VOYAGE_API_KEY"))
     bets = PolymarketClient().fetch_bets(10000)
-    print(bets)
+    print(f"Fetched {len(bets)} bets from Polymarket")
     sync_source(bets, repo, embedder, show_progress=args.progress, backfill_missing=not args.no_backfill)
     # auto_links, queued = propose_and_link(repo, embedder, ["polymarket"])
     # print({"linked": auto_links, "queued": queued})
