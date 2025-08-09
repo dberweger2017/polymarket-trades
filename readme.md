@@ -21,26 +21,28 @@ A compact pipeline for ingesting **open** prediction markets (starting with Poly
 ```mermaid
 flowchart LR
   subgraph Sources
-    PM[Polymarket<br/>(open markets)]
-    S2[Other markets<br/>(Manifold/Kalshi/...)]
+    PM[Polymarket (open markets)]
+    S2[Other markets (Manifold/Kalshi/...)]
   end
 
   PM --> SYNC
   S2 --> SYNC
 
   subgraph Core
-    SYNC[Sync Layer<br/>(fetch + normalize)]
-    DB[(SQLite Repo<br/>bets/events/aliases)]
-    CACHE[(Embedding Cache<br/>hash -> vector)]
-    MATCH[Matcher<br/>(cosine; auto-link/queue)]
+    SYNC[Sync Layer (fetch + normalize)]
+    DB[(SQLite Repo: bets/events/aliases)]
+    CACHE[(Embedding Cache: hash -> vector)]
+    MATCH[Matcher (cosine; auto-link/queue)]
+    UI[Two-Pane UI (--ui)]
+    EMB[Embedding Provider (Voyage 3.5 / 3.5-lite)]
   end
 
   SYNC --> DB
   DB --> CACHE
-  CACHE -->|miss| EMB[Embedding Provider<br/>(Voyage 3.5 / 3.5-lite)]
+  CACHE -->|miss| EMB
   EMB --> CACHE
   DB --> MATCH
-  MATCH --> UI[Two-Pane UI (--ui)]
+  MATCH --> UI
   UI --> DB
 ```
 
