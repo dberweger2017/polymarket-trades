@@ -1,3 +1,4 @@
+# market_sync/clients/polymarket.py
 from typing import List, Optional
 import requests
 from requests.adapters import HTTPAdapter

@@ -1,3 +1,4 @@
+# main.py
 import os
 from dotenv import load_dotenv
 from market_sync.config import DB_PATH, VOYAGE_MODEL
