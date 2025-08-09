@@ -46,8 +46,8 @@ flowchart LR
 
 **Rendered diagrams** (PNG):
 
-- System architecture: /mnt/data/market_sync_architecture.png
-- Embedding cost comparison: /mnt/data/embedding_prices.png
+- System architecture: https://github.com/dberweger2017/polymarket-trades/blob/main/img/market_sync_architecture.png?raw=true
+- Embedding cost comparison: https://github.com/dberweger2017/polymarket-trades/blob/main/img/embedding_prices.png?raw=true
 
 ---
 
